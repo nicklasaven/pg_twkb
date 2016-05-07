@@ -1,0 +1,5 @@
+default_version = '0.1'
+module_pathname = '$libdir/pg_twkb'
+requires 'postgis'
+relocatable = true
+comment = 'TWKB tools etc'
