@@ -9,8 +9,9 @@
 
 #include <sqlite3.h>
 
+#define SQLSTRLEN 8192
 
-int create_sqlite_table(Portal *cur,sqlite3 *db);
+int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str);
 
 
 /*Input a postgres type and get a sqlite type back
@@ -42,39 +43,77 @@ for (i=0;i<7;i++)
 	return 0;
 }
 
-int create_sqlite_table(Portal *cur,sqlite3 *db)
+int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str)
 {
-	char create_table_string[8192];
+	char create_table_string[SQLSTRLEN];
 	char tmp_str[64];
 	TupleDesc tupdesc;
 	SPITupleTable *tuptable;
 	int i, rc;
 	int strlengd = 0;
+	int strlengd_ins = 0;
 	char *err_msg, sqlitetype[15] ;
-	
-	/*Get fielads definition by ftching 0 rows*/
+	char field_name[128];
+	char value_list[256];	
+	int strlengd_vals = 0;
+	/*Get fielads definition by fetching 0 rows*/
 	SPI_cursor_fetch(*cur, true,0);
 	
 
 	snprintf(create_table_string, sizeof(create_table_string), " %s","create table test(");
 	strlengd = strlen(create_table_string);
+	
+	snprintf(insert_str,SQLSTRLEN, " %s","insert into test(");
+	strlengd_ins = strlen(insert_str);
+	
+	
+	snprintf(value_list,sizeof(value_list), " %s","values(");
+	strlengd_vals = strlen(value_list);
+	
 	tupdesc = SPI_tuptable->tupdesc;
+	
 	for (i = 1; i <= tupdesc->natts; i++)
 	{
-		elog(INFO, "pg_typ: %s\n", SPI_gettype(tupdesc, i));
+		 snprintf(field_name, sizeof(field_name), "%s", SPI_fname(tupdesc, i));
+		
+		//convert type to sqlite type
 		getsqlitetype(SPI_gettype(tupdesc, i), sqlitetype);
+		
+		//put together field name, type and comma sign if not last column
 		snprintf(tmp_str, sizeof(tmp_str), " %s %s%s",
-		SPI_fname(tupdesc, i),
+		field_name,
 		sqlitetype,
 		(i == tupdesc->natts) ? " " : ", ");
-		
-		
+
+		//put the column name and type in the create-table sql-string
 		snprintf(create_table_string+strlengd, sizeof(create_table_string)-strlengd, " %s",tmp_str);
-		
 		strlengd += strlen(tmp_str);
+		
+		//construct the insert string with field names
+		snprintf(insert_str+strlengd_ins, SQLSTRLEN-strlengd_ins, "%s%s",
+		field_name,
+		(i == tupdesc->natts) ? " " : ", ");		
+		strlengd_ins += strlen(field_name)+1; //adding 1 for the comma-sign
+		
+		//construct the value part of the insert
+		snprintf(value_list+strlengd_vals, sizeof(value_list)-strlengd_vals, "%s%s",
+		"?",
+		(i == tupdesc->natts) ? " " : ", ");		
+		strlengd_vals += 2; //adding 1 for the comma-sign
+		
+	elog(INFO, "strlength %d, temp: %s",strlengd_ins, insert_str);
 	}
 	snprintf(create_table_string+strlengd, sizeof(create_table_string)-strlengd, " %s",")");
+	
+	
+	elog(INFO, " SQLSTRLEN-strlengd_ins: %d, insert sql: %s", SQLSTRLEN-strlengd_ins, insert_str);
+//	snprintf(insert_str+strlengd_ins, SQLSTRLEN-strlengd_ins, " %s",")");
+	
+	
+	snprintf(insert_str+strlengd_ins, SQLSTRLEN-strlengd_ins, " %s%s%s",")",value_list,")" );
+	
 	elog(INFO, "sql: %s", create_table_string);
+	elog(INFO, "insert sql: %s", insert_str);
 	rc = sqlite3_exec(db, create_table_string, NULL, 0, &err_msg);
 	    
 	    if (rc != SQLITE_OK ) {	
@@ -102,12 +141,21 @@ int write2sqlite(char* sql_string, char* sqlitedb_name)
 HeapTuple tuple;
 	int i, j;
 	SPIPlanPtr plan;
-	char buf[8192];
+	char insert_str[SQLSTRLEN];
+	char buf[SQLSTRLEN];
 	Portal cur;
 	char *our_cursor;
-	spi_conn = SPI_connect();
-
+	void *val_p;
+	int val_int;
+	int val_int64;
+	float8 val_float;
+	Datum val_datum;
+	bool null_check;
+	char *pg_type;
 	
+sqlite3_stmt *prepared_statement;
+	
+	spi_conn = SPI_connect();
 	if (spi_conn!=SPI_OK_CONNECT)
 		ereport(ERROR,  ( errmsg("Failed to open SPI Connection")));
 	
@@ -124,19 +172,22 @@ HeapTuple tuple;
 	//ret = SPI_exec(sql_string, 0);
 	cur = SPI_cursor_open("our_cursor", plan,NULL,NULL,true);
 
-	create_sqlite_table(&cur,db);
 	
-
+	
+	create_sqlite_table(&cur,db, insert_str);
+	
+//TODO add error handling	
+ sqlite3_prepare_v2(db,insert_str,strlen(insert_str), &prepared_statement,NULL);
 
 	do
 	{
 		
+	sqlite3_exec(db, "BEGIN TRANSACTION", NULL, NULL, &err_msg);
 		
-		SPI_cursor_fetch(cur, true,10);
+		SPI_cursor_fetch(cur, true,10000);
 		
 		proc = SPI_processed;
 		
-		 elog(INFO, "proc %d", proc);
 //	    if (ret > 0 && SPI_tuptable != NULL)
 //	    {
 		    
@@ -144,25 +195,98 @@ HeapTuple tuple;
 		tuptable = SPI_tuptable;
 		
 
-		 elog(INFO, "proc %d", proc);
 		for (j = 0; j < proc; j++)
 		{
 			
-		 elog(INFO, "j: %d", j);
 		    tuple = tuptable->vals[j];
 
-		 elog(INFO, "test: %d", 19);
-		 elog(INFO, "tupdesc->natts: %d", tupdesc->natts);
+
 		    for (i = 1, buf[0] = 0; i <= tupdesc->natts; i++)
 			{
-		 elog(INFO, "i: %d", i);
-			snprintf(buf + strlen (buf), sizeof(buf) - strlen(buf), " %s%s",
-				SPI_getvalue(tuple, tupdesc, i),
-				(i == tupdesc->natts) ? " " : " |");
-		    elog(INFO, "EXECQ: %s", buf);
+					pg_type = SPI_gettype(tupdesc, i);
+						
+						
+						
+						
+						
+				if(strcmp(pg_type, "bool")==0)
+				{			
+					val_int = (bool) (DatumGetBool(SPI_getbinval(tuple,tupdesc,i, &null_check)) ? 1:0);
+					if(null_check)
+						sqlite3_bind_null(prepared_statement, i);
+					else
+					sqlite3_bind_int(prepared_statement, i,(int) val_int);
+				}
+				if(strcmp(pg_type, "int2")==0)
+				{			
+					val_int = (int) DatumGetInt16(SPI_getbinval(tuple,tupdesc,i, &null_check));
+					//TODO add error handling
+					if(null_check)
+						sqlite3_bind_null(prepared_statement, i);
+					else
+					sqlite3_bind_int(prepared_statement, i,val_int);
+				}
+				else if(strcmp(pg_type, "int4")==0)
+				{			
+					val_int = (int) DatumGetInt32(SPI_getbinval(tuple,tupdesc,i, &null_check));
+					//TODO add error handling
+					if(null_check)
+						sqlite3_bind_null(prepared_statement, i);
+					else
+					sqlite3_bind_int(prepared_statement, i,val_int);
+					
+				}	
+				else if(strcmp(pg_type, "int8")==0)
+				{			
+					val_int64 = (int64) DatumGetInt64(SPI_getbinval(tuple,tupdesc,i, &null_check));
+					//TODO add error handling
+					if(null_check)
+						sqlite3_bind_null(prepared_statement, i);
+					else
+					sqlite3_bind_int64(prepared_statement, i,val_int64);
+				}			
+				else if(strcmp(pg_type, "float4")==0)
+				{			
+					val_float = (float8) DatumGetFloat4(SPI_getbinval(tuple,tupdesc,i, &null_check));
+					//TODO add error handling
+					if(null_check)
+						sqlite3_bind_null(prepared_statement, i);
+					else
+					sqlite3_bind_double(prepared_statement, i,val_float);
+					
+				}
+				else if(strcmp(pg_type, "float8")==0)
+				{			
+					val_float = (float8) DatumGetFloat8(SPI_getbinval(tuple,tupdesc,i, &null_check));
+					//TODO add error handling
+					if(null_check)
+						sqlite3_bind_null(prepared_statement, i);
+					else
+					sqlite3_bind_double(prepared_statement, i,val_float);
+				}	
+				else if(strcmp(pg_type, "bytea")==0)
+				{			
+					val_p = (void*) PG_DETOAST_DATUM(SPI_getbinval(tuple,tupdesc,i, &null_check));
+					//TODO add error handling
+					if(null_check)
+						sqlite3_bind_null(prepared_statement, i);
+					else
+					sqlite3_bind_blob(prepared_statement, i, (const void*) VARDATA_ANY(val_p), VARSIZE_ANY(val_p)-VARHDRSZ, SQLITE_TRANSIENT);
+				}		
+				else
+				{			
+				//	val = (void*) PG_DETOAST_DATUM(SPI_getbinval(tuple,tupdesc,i, &null_check));
+					//TODO add error handling
+					sqlite3_bind_text(prepared_statement,i,SPI_getvalue(tuple, tupdesc, i),-1,NULL);
+				}		
+
 		}
-	    
+	    			sqlite3_step(prepared_statement);	
+		sqlite3_clear_bindings(prepared_statement);
+				sqlite3_reset(prepared_statement);
 		}
+		
+	sqlite3_exec(db, "END TRANSACTION", NULL, NULL, &err_msg);
 	}
 	while (proc > 0);
 	SPI_finish();
