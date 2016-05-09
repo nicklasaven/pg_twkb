@@ -19,34 +19,34 @@
 */
 typedef struct
 {
-	/* Pointers to the bytes */
-	uint8_t *twkb; /* Points to start of TWKB */
-	uint8_t *twkb_end; /* Points to end of TWKB */
-	uint8_t *pos; /* Current read position */
+    /* Pointers to the bytes */
+    uint8_t *twkb; /* Points to start of TWKB */
+    uint8_t *twkb_end; /* Points to end of TWKB */
+    uint8_t *pos; /* Current read position */
 
-	uint32_t check; /* Simple validity checks on geometries */
-	uint32_t lwtype; /* Current type we are handling */
+    uint32_t check; /* Simple validity checks on geometries */
+    uint32_t lwtype; /* Current type we are handling */
 
-	uint8_t has_bbox;
-	uint8_t has_size;
-	uint8_t has_idlist;
-	uint8_t has_z;
-	uint8_t has_m;
-	uint8_t is_empty;
+    uint8_t has_bbox;
+    uint8_t has_size;
+    uint8_t has_idlist;
+    uint8_t has_z;
+    uint8_t has_m;
+    uint8_t is_empty;
 
-	/* Precision factors to convert ints to double */
-	double factor;
-	double factor_z;
-	double factor_m;
+    /* Precision factors to convert ints to double */
+    double factor;
+    double factor_z;
+    double factor_m;
 
-	uint64_t size;
+    uint64_t size;
 
-	/* Info about current geometry */
-	uint8_t magic_byte; /* the magic byte contain info about if twkb contain id, size info, bboxes and precision */
+    /* Info about current geometry */
+    uint8_t magic_byte; /* the magic byte contain info about if twkb contain id, size info, bboxes and precision */
 
-	int ndims; /* Number of dimensions */
+    int ndims; /* Number of dimensions */
 
-	int64_t *coords; /* An array to keep delta values from 4 dimensions */
+    int64_t *coords; /* An array to keep delta values from 4 dimensions */
 
 } twkb_parse_state;
 

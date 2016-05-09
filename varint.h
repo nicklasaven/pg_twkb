@@ -9,7 +9,7 @@
  * the terms of the GNU General Public Licence. See the LICENCE file.
  *
  **********************************************************************
- * 
+ *
  * Handle varInt values, as described here:
  * http://developers.google.com/protocol-buffers/docs/encoding#varints
  *

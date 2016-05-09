@@ -8,8 +8,8 @@
  * the terms of the GNU General Public Licence. See the LICENCE file.
  *
  **********************************************************************/
- 
- #include "postgres.h"
+
+#include "postgres.h"
 
 #include <math.h>
 #include <float.h>
