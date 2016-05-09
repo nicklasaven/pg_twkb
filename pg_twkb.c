@@ -172,11 +172,10 @@ Datum TWKB2file(PG_FUNCTION_ARGS)
     PG_RETURN_INT32(1);
 }
 
-
 PG_FUNCTION_INFO_V1(TWKB_Write2SQLite);
 Datum TWKB_Write2SQLite(PG_FUNCTION_ARGS)
 {
-    char *sqlitedb_name,*sql_string;
+    char *sqlitedb_name,*sql_string, *geom_name, *table_name, *id_name;
 
     if( PG_NARGS() < 1 || PG_ARGISNULL(0))
     {
@@ -184,7 +183,6 @@ Datum TWKB_Write2SQLite(PG_FUNCTION_ARGS)
         PG_RETURN_NULL();
     }
     sql_string = text_to_cstring(PG_GETARG_TEXT_P(0));
-
     if ( PG_NARGS() < 2 || PG_ARGISNULL(1) )
     {
         lwerror("No sqlitedb to write to");
@@ -192,10 +190,34 @@ Datum TWKB_Write2SQLite(PG_FUNCTION_ARGS)
     }
     sqlitedb_name =  text_to_cstring(PG_GETARG_TEXT_P(1));
 
+    if( PG_NARGS() < 3 || PG_ARGISNULL(2))
+    {
+		table_name = "";
+    }
+    table_name = text_to_cstring(PG_GETARG_TEXT_P(2));
+    
+   if( PG_NARGS() < 4|| PG_ARGISNULL(3))
+    {
+		geom_name = "";
+    }
+    geom_name = text_to_cstring(PG_GETARG_TEXT_P(3));
+    
+   if( PG_NARGS() < 5 || PG_ARGISNULL(4))
+    {
+		id_name = "";
+    }
+    id_name = text_to_cstring(PG_GETARG_TEXT_P(4));
+
+   
+
 //	PG_FREE_IF_COPY(bytea_twkb, 0);
-    write2sqlite(sql_string, sqlitedb_name);
+    write2sqlite(sql_string,table_name, geom_name, id_name, sqlitedb_name);
+    
     pfree(sqlitedb_name);
     pfree(sql_string);
+    pfree(geom_name);
+    pfree(table_name);
+    pfree(id_name);
     PG_RETURN_INT32(1);
 }
 

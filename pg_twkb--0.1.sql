@@ -26,10 +26,11 @@ AS 'MODULE_PATHNAME', 'text2file'
 LANGUAGE c IMMUTABLE;
 
 
-CREATE OR REPLACE FUNCTION TWKB_Write2SQLite(sql_string text,sqlitedb text)
+CREATE OR REPLACE FUNCTION TWKB_Write2SQLite(sql_string text,sqlitedb text,table_name text , geom_name text default '', id_name text default '')
 RETURNS void
 AS 'MODULE_PATHNAME', 'TWKB_Write2SQLite'
 LANGUAGE c IMMUTABLE;
+
 
 
 CREATE OR REPLACE FUNCTION TWKB_getTileId(x int, y int)

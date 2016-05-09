@@ -73,4 +73,5 @@ void lwerror(const char *fmt, ...);
 uint8_t* twkb_to_twkbcoll(uint8_t **twkb, size_t *sizes,size_t *out_size, int64_t *idlist, int n);
 
 int getsqlitetype(char *pgtype, char *sqlitetype);
-int write2sqlite(char* sql_string, char* sqlitedb_name);
+//int write2sqlite(char* sql_string, char* sqlitedb_name);
+int write2sqlite(char* sql_string,char* table_name,char* geom_name,char* id_name, char* sqlitedb_name);
