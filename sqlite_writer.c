@@ -161,17 +161,16 @@ int create_spatial_index(sqlite3 *db,char  *table_name, char * geom_name, char *
 	    } 	
 	   elog(INFO, "create table string: %s", sql_txt_pg); 
 	    
-	snprintf(sql_txt_pg,sizeof(sql_txt_pg), " %s%s%s%s%s%s%s%s%s%s",
+	snprintf(sql_txt_pg,sizeof(sql_txt_pg), " %s%s%s%s%s%s%s%s%s",
 	"with o as (",
 	    sql_string,
-	    "), g as( select  ",
+	    "), g as( select ",
 	id_name,
 	" id,", 
 	geom_name,
 	" geom from ",
 	    table_name,
-	    ") select g.id, st_xmin(g.geom) minx,st_xmax(g.geom) maxx,st_ymin(g.geom) miny,st_ymax(g.geom) maxy from g inner join o on g.id=o.",
-	    id_name);
+	    ") select g.id, st_xmin(g.geom) minx,st_xmax(g.geom) maxx,st_ymin(g.geom) miny,st_ymax(g.geom) maxy from g inner join o on g.id=o.id");
 
 	   elog(INFO, "select table string: %s", sql_txt_pg); 
 	plan =  SPI_prepare(sql_txt_pg,0,NULL);
@@ -452,10 +451,10 @@ int write2sqlite(char* sql_string,char* table_name,char* geom_name,char* id_name
 	}
 	while (proc > 0);
 	
-/*	if(table_name && geom_name && id_name)
+	if(table_name && geom_name && id_name)
 		create_spatial_index(db,table_name, geom_name, id_name, sql_string);
 	else
-		elog(INFO, "Finnishing without spatial index");*/
+		elog(INFO, "Finnishing without spatial index");
 	
 	SPI_finish();
 	    sqlite3_close(db);
