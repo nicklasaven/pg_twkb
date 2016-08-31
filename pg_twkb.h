@@ -74,4 +74,5 @@ uint8_t* twkb_to_twkbcoll(uint8_t **twkb, size_t *sizes,size_t *out_size, int64_
 
 int getsqlitetype(char *pgtype, char *sqlitetype);
 //int write2sqlite(char* sql_string, char* sqlitedb_name);
-int write2sqlite(char* sql_string,char* table_name,char* geom_name,char* id_name, char* sqlitedb_name);
+//int write2sqlite(char* sql_string,char* table_name,char* twkb_name,char* geom_name,char* id_name, char* sqlitedb_name);
+int write2sqlite(char *sqlitedb_name,char *dataset_name, char *sql_string, char *twkb_name,char *id_name,char *idx_geom,char *idx_tbl, char *idx_id);

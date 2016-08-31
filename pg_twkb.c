@@ -1,13 +1,14 @@
 /**********************************************************************
  *
- * PostGIS - Spatial Types for PostgreSQL
+ * pg_twkb - Spatial Types for PostgreSQL
  *
- * Copyright (C) 2015 Nicklas Avén
+ * Copyright (C) 2016 Nicklas Avén
  *
  * This is free software; you can redistribute and/or modify it under
  * the terms of the GNU General Public Licence. See the LICENCE file.
  *
  **********************************************************************/
+
 
 #include <pg_twkb.h>
 
@@ -175,49 +176,84 @@ Datum TWKB2file(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(TWKB_Write2SQLite);
 Datum TWKB_Write2SQLite(PG_FUNCTION_ARGS)
 {
-    char *sqlitedb_name,*sql_string, *geom_name, *table_name, *id_name;
-
-    if( PG_NARGS() < 1 || PG_ARGISNULL(0))
-    {
-        lwnotice("No sql query to use");
-        PG_RETURN_NULL();
-    }
-    sql_string = text_to_cstring(PG_GETARG_TEXT_P(0));
-    if ( PG_NARGS() < 2 || PG_ARGISNULL(1) )
+    char *sqlitedb_name,*dataset_name, *sql_string, *twkb_name, *id_name,*idx_tbl, *idx_geom, *idx_id;
+ 
+/*Name of sqlite-database to write to*/
+	if ( PG_NARGS() < 1 || PG_ARGISNULL(0) )
     {
         lwerror("No sqlitedb to write to");
         PG_RETURN_NULL();
     }
-    sqlitedb_name =  text_to_cstring(PG_GETARG_TEXT_P(1));
+    sqlitedb_name =  text_to_cstring(PG_GETARG_TEXT_P(0));
+    
+/*Name of dataset in sqlite*/
+    if ( PG_NARGS() < 2 || PG_ARGISNULL(1) )
+    {
+        lwerror("No name of dataset");
+        PG_RETURN_NULL();
+    }
+    dataset_name =  text_to_cstring(PG_GETARG_TEXT_P(1));
 
+/*SQL-query to fetch data*/    
     if( PG_NARGS() < 3 || PG_ARGISNULL(2))
     {
-		table_name = "";
+        lwnotice("No sql query to use");
+        PG_RETURN_NULL();
     }
-    table_name = text_to_cstring(PG_GETARG_TEXT_P(2));
-    
+    sql_string = text_to_cstring(PG_GETARG_TEXT_P(2));
+
+/*Name of twkb-column in sql-query above*/    
    if( PG_NARGS() < 4|| PG_ARGISNULL(3))
     {
-		geom_name = "";
+		        lwerror("No twkb-column name");
+        PG_RETURN_NULL();
     }
-    geom_name = text_to_cstring(PG_GETARG_TEXT_P(3));
-    
+    twkb_name = text_to_cstring(PG_GETARG_TEXT_P(3));
+
+    /*Name of id-column in sql-query above*/
    if( PG_NARGS() < 5 || PG_ARGISNULL(4))
     {
 		id_name = "";
     }
-    id_name = text_to_cstring(PG_GETARG_TEXT_P(4));
+    id_name = text_to_cstring(PG_GETARG_TEXT_P(4)); 
+    
+   /*Name of table to create spatial index from with corresponding id*/ 
+   if( PG_NARGS() < 6|| PG_ARGISNULL(5))
+    {
+		idx_tbl = "";
+    }
+    idx_tbl = text_to_cstring(PG_GETARG_TEXT_P(5));
+   
+/*Geometry column to create spatial index from*/    
+       if( PG_NARGS() < 7|| PG_ARGISNULL(6))
+    {
+		idx_geom = "";
+    }
+    idx_geom = text_to_cstring(PG_GETARG_TEXT_P(6));
+   /*id in spatial index that points to right twkb*/ 
+       if( PG_NARGS() < 8|| PG_ARGISNULL(7))
+    {
+		idx_id = "";
+    }
+    idx_id = text_to_cstring(PG_GETARG_TEXT_P(7));
+    
 
    
 
 //	PG_FREE_IF_COPY(bytea_twkb, 0);
-    write2sqlite(sql_string,table_name, geom_name, id_name, sqlitedb_name);
+    write2sqlite(sqlitedb_name,dataset_name, sql_string, twkb_name,id_name,idx_geom,idx_tbl, idx_id);
     
     pfree(sqlitedb_name);
     pfree(sql_string);
-    pfree(geom_name);
-    pfree(table_name);
+    pfree(dataset_name);
+    
+    pfree(twkb_name);
     pfree(id_name);
+    pfree(idx_tbl);
+    pfree(idx_geom);
+    pfree(idx_id);
+    
+    
     PG_RETURN_INT32(1);
 }
 

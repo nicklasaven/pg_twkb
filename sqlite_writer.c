@@ -1,9 +1,17 @@
+/**********************************************************************
+ *
+ * pg_twkb - Spatial Types for PostgreSQL
+ *
+ * Copyright (C) 2016 Nicklas Avén
+ *
+ * This is free software; you can redistribute and/or modify it under
+ * the terms of the GNU General Public Licence. See the LICENCE file.
+ *
+ **********************************************************************/
 
 
 #include <math.h>
 #include "pg_twkb.h"
-#include "lwout_twkb.h"
-#include "lwin_twkb.h"
 #include "utils/builtins.h"
 #include "executor/spi.h"
 
@@ -11,11 +19,12 @@
 
 #define SQLSTRLEN 8192
 
-int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str, char *table_name, char *id_name);
-int create_spatial_index(sqlite3 *db,char  *table_name, char *geom_name, char *id_name, char *sql_string);
+int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str, char *dataset_name, char *twkb_name,char *id_name);
+//int create_spatial_index(sqlite3 *db,char  *dataset_name, char *idx_geom, char *idx_id, char *sql_string);
+int create_spatial_index(sqlite3 *db,char  *dataset_name, char *idx_tbl,char * idx_geom, char *idx_id, char *sql_string);
 
 /*Input a postgres type and get a sqlite type back
-ANything but what is defined in types results as "text"*/
+Anything but what is defined in types results as "text"*/
 int getsqlitetype(char *pgtype, char *sqlitetype)
 {
 	int i;
@@ -43,7 +52,7 @@ for (i=0;i<7;i++)
 	return 0;
 }
 
-int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str, char *table_name, char *id_name)
+int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str, char *dataset_name, char *twkb_name, char *id_name)
 {
 	char create_table_string[SQLSTRLEN];
 	char tmp_str[64];
@@ -59,10 +68,10 @@ int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str, char *table_na
 	SPI_cursor_fetch(*cur, true,0);
 	
 
-	snprintf(create_table_string, sizeof(create_table_string), " %s%s%s","create table ",table_name,"(");
+	snprintf(create_table_string, sizeof(create_table_string), " %s%s%s","create table ",dataset_name,"(");
 	strlengd = strlen(create_table_string);
 	
-	snprintf(insert_str,SQLSTRLEN, " %s%s%s","insert into " ,table_name,"(");
+	snprintf(insert_str,SQLSTRLEN, " %s%s%s","insert into " ,dataset_name,"(");
 	strlengd_ins = strlen(insert_str);
 	
 	
@@ -78,22 +87,51 @@ int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str, char *table_na
 		//convert type to sqlite type
 		getsqlitetype(SPI_gettype(tupdesc, i), sqlitetype);
 		
-		//put together field name, type and comma sign if not last column
-		snprintf(tmp_str, sizeof(tmp_str), " %s %s%s%s",
-		field_name,
-		sqlitetype,
-		(strcmp(field_name, id_name)==0) ? " primary key " : " ",
-		(i == tupdesc->natts) ? " " : ", ");
-
+		
+		
+		if (strcmp(field_name, id_name)==0) 
+		{
+			snprintf(tmp_str, sizeof(tmp_str), " %s%s",
+			" id integer primary key",
+			(i == tupdesc->natts) ? " " : ", ");	
+		
+			//construct the insert string with field names
+			snprintf(insert_str+strlengd_ins, SQLSTRLEN-strlengd_ins, "%s%s",
+			"id",
+			(i == tupdesc->natts) ? " " : ", ");		
+			strlengd_ins += 3; //adding 1 for the comma-sign			
+		}
+		else if (strcmp(field_name, twkb_name)==0) 
+		{
+			snprintf(tmp_str, sizeof(tmp_str), " %s%s",
+			" twkb blob",
+			(i == tupdesc->natts) ? " " : ", ");	
+		
+			//construct the insert string with field names
+			snprintf(insert_str+strlengd_ins, SQLSTRLEN-strlengd_ins, "%s%s",
+			"twkb",
+			(i == tupdesc->natts) ? " " : ", ");		
+			strlengd_ins += 5; //adding 1 for the comma-sign			
+		}
+		else
+		{
+			//put together field name, type and comma sign if not last column
+			snprintf(tmp_str, sizeof(tmp_str), " %s %s%s",
+			field_name,
+			sqlitetype,
+			(i == tupdesc->natts) ? " " : ", ");
+			
+					
+			//construct the insert string with field names
+			snprintf(insert_str+strlengd_ins, SQLSTRLEN-strlengd_ins, "%s%s",
+			field_name,
+			(i == tupdesc->natts) ? " " : ", ");		
+			strlengd_ins += strlen(field_name)+1; //adding 1 for the comma-sign
+		}
 		//put the column name and type in the create-table sql-string
 		snprintf(create_table_string+strlengd, sizeof(create_table_string)-strlengd, " %s",tmp_str);
 		strlengd += strlen(tmp_str);
 		
-		//construct the insert string with field names
-		snprintf(insert_str+strlengd_ins, SQLSTRLEN-strlengd_ins, "%s%s",
-		field_name,
-		(i == tupdesc->natts) ? " " : ", ");		
-		strlengd_ins += strlen(field_name)+1; //adding 1 for the comma-sign
 		
 		//construct the value part of the insert
 		snprintf(value_list+strlengd_vals, sizeof(value_list)-strlengd_vals, "%s%s",
@@ -126,7 +164,7 @@ int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str, char *table_na
 		return 0;
 }
 
-int create_spatial_index(sqlite3 *db,char  *table_name, char * geom_name, char *id_name, char *sql_string)
+int create_spatial_index(sqlite3 *db,char  *dataset_name, char *idx_tbl,char * idx_geom, char *idx_id, char *sql_string)
 {
 	char sql_txt_pg[SQLSTRLEN];
 	char sql_txt_sqlite[SQLSTRLEN];
@@ -148,7 +186,7 @@ int create_spatial_index(sqlite3 *db,char  *table_name, char * geom_name, char *
 	
 	snprintf(sql_txt_pg,sizeof(sql_txt_pg), " %s%s%s",
 	"CREATE VIRTUAL TABLE ",
-	table_name,
+	dataset_name,
 	"_idx_geom USING rtree(id,minX, maxX,minY, maxY)");
 	
 		rc = sqlite3_exec(db, sql_txt_pg, NULL, 0, &err_msg);
@@ -165,11 +203,11 @@ int create_spatial_index(sqlite3 *db,char  *table_name, char * geom_name, char *
 	"with o as (",
 	    sql_string,
 	    "), g as( select ",
-	id_name,
+	idx_id,
 	" id,", 
-	geom_name,
+	idx_geom,
 	" geom from ",
-	    table_name,
+	    idx_tbl,
 	    ") select g.id, st_xmin(g.geom) minx,st_xmax(g.geom) maxx,st_ymin(g.geom) miny,st_ymax(g.geom) maxy from g inner join o on g.id=o.id");
 
 	   elog(INFO, "select table string: %s", sql_txt_pg); 
@@ -179,7 +217,7 @@ int create_spatial_index(sqlite3 *db,char  *table_name, char * geom_name, char *
 
 	snprintf(sql_txt_sqlite,sizeof(sql_txt_sqlite), " %s%s%s",
 	"insert into ",
-	table_name,
+	dataset_name,
 	"_idx_geom  (id,minX, maxX,minY, maxY) values(?,?,?,?,?)"); 
   
   
@@ -291,8 +329,7 @@ int create_spatial_index(sqlite3 *db,char  *table_name, char * geom_name, char *
 	    
 	return 0;
 }
-
-int write2sqlite(char* sql_string,char* table_name,char* geom_name,char* id_name, char* sqlitedb_name)
+int write2sqlite(char *sqlitedb_name,char *dataset_name, char *sql_string, char *twkb_name,char *id_name,char *idx_geom,char *idx_tbl, char *idx_id)
 {
 	char *err_msg;
 	int spi_conn;
@@ -335,10 +372,10 @@ int write2sqlite(char* sql_string,char* table_name,char* geom_name,char* id_name
 
 	
 	
-	create_sqlite_table(&cur,db, insert_str,table_name, id_name);
+	create_sqlite_table(&cur,db, insert_str,dataset_name,twkb_name, id_name);
 	
 	   elog(INFO, "back from creating table"); 
-	
+	elog(INFO, "inserted sql = %s",insert_str);
 //TODO add error handling	
  sqlite3_prepare_v2(db,insert_str,strlen(insert_str), &prepared_statement,NULL);
 
@@ -451,8 +488,8 @@ int write2sqlite(char* sql_string,char* table_name,char* geom_name,char* id_name
 	}
 	while (proc > 0);
 	
-	if(table_name && geom_name && id_name)
-		create_spatial_index(db,table_name, geom_name, id_name, sql_string);
+	if(dataset_name && idx_geom && idx_id)
+		create_spatial_index(db,dataset_name,idx_tbl, idx_geom, idx_id, sql_string);
 	else
 		elog(INFO, "Finnishing without spatial index");
 	

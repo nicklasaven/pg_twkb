@@ -1,6 +1,6 @@
 /**********************************************************************
  *
- * PostGIS - Spatial Types for PostgreSQL
+ * pg_twkb - Spatial Types for PostgreSQL
  *
  * Copyright (C) 2014 Sandro Santilli <strk@keybit.net>
  * Copyright (C) 2013 Nicklas Avén

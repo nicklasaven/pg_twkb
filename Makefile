@@ -5,8 +5,6 @@ LDFLAGS =  -L /usr/local/lib -l lwgeom -lsqlite3
 MODULE_big = pg_twkb
 OBJS = pg_twkb.o\
 		twkb_tools.o \
-		lwin_twkb.o \
-		lwout_twkb.o \
 		sqlite_writer.o \
 
 EXTENSION = pg_twkb
