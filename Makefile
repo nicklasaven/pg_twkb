@@ -13,7 +13,7 @@ DATA = pg_twkb--0.1.sql
 EXTRA-CLEAN =
 
 #PG_CONFIG = pg_config
-PG_CONFIG =/usr/lib/postgresql/9.5/bin/pg_config
+PG_CONFIG =/usr/lib/postgresql/9.6/bin/pg_config
 
 CFLAGS += $(shell $(CURL_CONFIG) --cflags)
 

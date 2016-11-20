@@ -17,6 +17,75 @@
 
 
 
+
+static inline void twkb_parse_state_advance(twkb_parse_state *s, size_t next)
+{
+    if( (s->pos + next) > s->twkb_end)
+    {
+        //~ lwerror("%s: TWKB structure does not match expected size!", __func__);
+        // lwnotice("TWKB structure does not match expected size!");
+    }
+
+    s->pos += next;
+}
+
+/**
+* Byte
+* Read a byte and advance the parse state forward.
+*/
+static uint8_t byte_from_twkb_state(twkb_parse_state *s)
+{
+    uint8_t val = *(s->pos);
+    twkb_parse_state_advance(s, WKB_BYTE_SIZE);
+    return val;
+}
+
+
+/**
+* Calculates the size of the bbox in varints in the form:
+* xmin, xdelta, ymin, ydelta
+*/
+size_t sizeof_bbox(TWKB_STATE *ts, int ndims)
+{
+    int i;
+    uint8_t buf[16];
+    size_t size = 0;
+    //~ LWDEBUGF(2, "Entered %s", __func__);
+    for ( i = 0; i < ndims; i++ )
+    {
+        size += varint_s64_encode_buf(ts->bbox_min[i], buf);
+        size += varint_s64_encode_buf((ts->bbox_max[i] - ts->bbox_min[i]), buf);
+    }
+    return size;
+}
+
+static inline int64_t twkb_parse_state_varint(twkb_parse_state *s)
+{
+    size_t size;
+    int64_t val = varint_s64_decode(s->pos, s->twkb_end, &size);
+    twkb_parse_state_advance(s, size);
+    return val;
+}
+
+static inline uint64_t twkb_parse_state_uvarint(twkb_parse_state *s)
+{
+    size_t size;
+    uint64_t val = varint_u64_decode(s->pos, s->twkb_end, &size);
+    twkb_parse_state_advance(s, size);
+    return val;
+}
+double twkb_parse_state_double(twkb_parse_state *s, double factor)
+{
+    size_t size;
+    int64_t val = varint_s64_decode(s->pos, s->twkb_end, &size);
+    twkb_parse_state_advance(s, size);
+    return val / factor;
+}
+
+
+
+
+
 typedef struct
 {
     int64_t bbox_min[MAX_N_DIMS];
@@ -28,6 +97,102 @@ typedef struct
     int has_m;
     int is_empty;
 } twkb_collection_data;
+
+
+static uint32_t lwtype_from_twkb_type(uint8_t twkb_type)
+{
+    switch (twkb_type)
+    {
+    case 1:
+        return POINTTYPE;
+    case 2:
+        return LINETYPE;
+    case 3:
+        return POLYGONTYPE;
+    case 4:
+        return MULTIPOINTTYPE;
+    case 5:
+        return MULTILINETYPE;
+    case 6:
+        return MULTIPOLYGONTYPE;
+    case 7:
+        return COLLECTIONTYPE;
+
+    default: /* Error! */
+        //~ lwerror("Unknown WKB type");
+        return 0;
+    }
+    return 0;
+}
+
+
+
+
+void header_from_twkb_state(twkb_parse_state *s)
+{
+    //~ LWDEBUG(2,"Entering magicbyte_from_twkb_state");
+
+    uint8_t extended_dims;
+
+    /* Read the first two bytes */
+    uint8_t type_precision = byte_from_twkb_state(s);
+    uint8_t metadata = byte_from_twkb_state(s);
+
+    /* Strip type and precision out of first byte */
+    uint8_t type = type_precision & 0x0F;
+    int8_t precision = unzigzag8((type_precision & 0xF0) >> 4);
+
+    /* Convert TWKB type to internal type */
+    s->lwtype = lwtype_from_twkb_type(type);
+
+    /* Convert the precision into factor */
+    s->factor = pow(10, (double)precision);
+
+    /* Strip metadata flags out of second byte */
+    s->has_bbox   =  metadata & 0x01;
+    s->has_size   = (metadata & 0x02) >> 1;
+    s->has_idlist = (metadata & 0x04) >> 2;
+    extended_dims = (metadata & 0x08) >> 3;
+    s->is_empty   = (metadata & 0x10) >> 4;
+
+    /* Flag for higher dims means read a third byte */
+    if ( extended_dims )
+    {
+        int8_t precision_z, precision_m;
+
+        extended_dims = byte_from_twkb_state(s);
+
+        /* Strip Z/M presence and precision from ext byte */
+        s->has_z    = (extended_dims & 0x01);
+        s->has_m    = (extended_dims & 0x02) >> 1;
+        precision_z = (extended_dims & 0x1C) >> 2;
+        precision_m = (extended_dims & 0xE0) >> 5;
+
+        /* Convert the precision into factor */
+        s->factor_z = pow(10, (double)precision_z);
+        s->factor_m = pow(10, (double)precision_m);
+    }
+    else
+    {
+        s->has_z = 0;
+        s->has_m = 0;
+        s->factor_z = 0;
+        s->factor_m = 0;
+    }
+
+    /* Read the size, if there is one */
+    if ( s->has_size )
+    {
+        s->size = twkb_parse_state_uvarint(s);
+    }
+
+    /* Calculate the number of dimensions */
+    s->ndims = 2 + s->has_z + s->has_m;
+
+    return;
+}
+
+
 
 
 /**
@@ -126,6 +291,26 @@ static twkb_collection_data twkb_get_bboxes(uint8_t **twkb, size_t *sizes, int n
     }
     return res;
 }
+
+
+
+/**
+* Writes the bbox in varints in the form:
+* xmin, xdelta, ymin, ydelta
+*/
+void write_bbox(TWKB_STATE *ts, int ndims)
+{
+    int i;
+    //~ LWDEBUGF(2, "Entered %s", __func__);
+    for ( i = 0; i < ndims; i++ )
+    {
+        bytebuffer_append_varint(ts->header_buf, ts->bbox_min[i]);
+        bytebuffer_append_varint(ts->header_buf, (ts->bbox_max[i] - ts->bbox_min[i]));
+    }
+}
+
+
+
 
 static uint8_t* twkb_write_new_buffer(twkb_collection_data ts_data,uint8_t **twkb, size_t *sizes, size_t *out_size, int64_t *idlist, int n)
 {

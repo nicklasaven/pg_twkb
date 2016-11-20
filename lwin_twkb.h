@@ -52,4 +52,4 @@ typedef struct
 
 
 void header_from_twkb_state(twkb_parse_state *s);
-inline double twkb_parse_state_double(twkb_parse_state *s, double factor);
+double twkb_parse_state_double(twkb_parse_state *s, double factor);

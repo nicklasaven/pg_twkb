@@ -19,9 +19,9 @@
 
 #define SQLSTRLEN 8192
 
-int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str, char *dataset_name, char *twkb_name,char *id_name);
+int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str, char *dataset_name, char *twkb_name,char *id_name,int create);
 //int create_spatial_index(sqlite3 *db,char  *dataset_name, char *idx_geom, char *idx_id, char *sql_string);
-int create_spatial_index(sqlite3 *db,char  *dataset_name, char *idx_tbl,char * idx_geom, char *idx_id, char *sql_string);
+int create_spatial_index(sqlite3 *db,char  *dataset_name, char *idx_tbl,char * idx_geom, char *idx_id, char *sql_string, int create);
 
 /*Input a postgres type and get a sqlite type back
 Anything but what is defined in types results as "text"*/
@@ -52,7 +52,7 @@ for (i=0;i<7;i++)
 	return 0;
 }
 
-int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str, char *dataset_name, char *twkb_name, char *id_name)
+int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str, char *dataset_name, char *twkb_name, char *id_name, int create)
 {
 	char create_table_string[SQLSTRLEN];
 	char tmp_str[64];
@@ -67,10 +67,13 @@ int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str, char *dataset_
 	/*Get fielads definition by fetching 0 rows*/
 	SPI_cursor_fetch(*cur, true,0);
 	
-
+if(create)
+{
 	snprintf(create_table_string, sizeof(create_table_string), " %s%s%s","create table ",dataset_name,"(");
 	strlengd = strlen(create_table_string);
 	
+	
+}
 	snprintf(insert_str,SQLSTRLEN, " %s%s%s","insert into " ,dataset_name,"(");
 	strlengd_ins = strlen(insert_str);
 	
@@ -128,10 +131,12 @@ int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str, char *dataset_
 			(i == tupdesc->natts) ? " " : ", ");		
 			strlengd_ins += strlen(field_name)+1; //adding 1 for the comma-sign
 		}
+		if(create)
+		{
 		//put the column name and type in the create-table sql-string
-		snprintf(create_table_string+strlengd, sizeof(create_table_string)-strlengd, " %s",tmp_str);
-		strlengd += strlen(tmp_str);
-		
+			snprintf(create_table_string+strlengd, sizeof(create_table_string)-strlengd, " %s",tmp_str);
+			strlengd += strlen(tmp_str);
+		}
 		
 		//construct the value part of the insert
 		snprintf(value_list+strlengd_vals, sizeof(value_list)-strlengd_vals, "%s%s",
@@ -141,7 +146,8 @@ int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str, char *dataset_
 		
 //	elog(INFO, "strlength %d, temp: %s",strlengd_ins, insert_str);
 	}
-	snprintf(create_table_string+strlengd, sizeof(create_table_string)-strlengd, " %s",")");
+	if(create)
+		snprintf(create_table_string+strlengd, sizeof(create_table_string)-strlengd, " %s",")");
 	
 	
 	elog(INFO, " SQLSTRLEN-strlengd_ins: %d, insert sql: %s", SQLSTRLEN-strlengd_ins, insert_str);
@@ -152,6 +158,8 @@ int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str, char *dataset_
 	
 	elog(INFO, "sql: %s", create_table_string);
 	elog(INFO, "insert sql: %s", insert_str);
+	if(create)
+	{
 	rc = sqlite3_exec(db, create_table_string, NULL, 0, &err_msg);
 	    
 	    if (rc != SQLITE_OK ) {	
@@ -161,10 +169,11 @@ int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str, char *dataset_
 		//fprintf(stderr, "SQL error: %s\n", err_msg);
 		
 	    } 	
+    }
 		return 0;
 }
 
-int create_spatial_index(sqlite3 *db,char  *dataset_name, char *idx_tbl,char * idx_geom, char *idx_id, char *sql_string)
+int create_spatial_index(sqlite3 *db,char  *dataset_name, char *idx_tbl,char * idx_geom, char *idx_id, char *sql_string, int create)
 {
 	char sql_txt_pg[SQLSTRLEN];
 	char sql_txt_sqlite[SQLSTRLEN];
@@ -184,21 +193,23 @@ int create_spatial_index(sqlite3 *db,char  *dataset_name, char *idx_tbl,char * i
 	HeapTuple tuple;
 	int tot_rows = 0;
 	
-	snprintf(sql_txt_pg,sizeof(sql_txt_pg), " %s%s%s",
-	"CREATE VIRTUAL TABLE ",
-	dataset_name,
-	"_idx_geom USING rtree(id,minX, maxX,minY, maxY)");
-	
-		rc = sqlite3_exec(db, sql_txt_pg, NULL, 0, &err_msg);
-	    
-	    if (rc != SQLITE_OK ) {	
-		    sqlite3_free(err_msg);
-		sqlite3_close(db);	
-		    ereport(ERROR,  ( errmsg("Problem creating table: %s", err_msg)));
-		//fprintf(stderr, "SQL error: %s\n", err_msg);		
-	    } 	
-	   elog(INFO, "create table string: %s", sql_txt_pg); 
-	    
+	if(create)
+	{
+		snprintf(sql_txt_pg,sizeof(sql_txt_pg), " %s%s%s",
+		"CREATE VIRTUAL TABLE ",
+		dataset_name,
+		"_idx_geom USING rtree(id,minX, maxX,minY, maxY)");
+		
+			rc = sqlite3_exec(db, sql_txt_pg, NULL, 0, &err_msg);
+		    
+		    if (rc != SQLITE_OK ) {	
+			    sqlite3_free(err_msg);
+			sqlite3_close(db);	
+			    ereport(ERROR,  ( errmsg("Problem creating table: %s", err_msg)));
+			//fprintf(stderr, "SQL error: %s\n", err_msg);		
+		    } 	
+		   elog(INFO, "create table string: %s", sql_txt_pg); 
+    }
 	snprintf(sql_txt_pg,sizeof(sql_txt_pg), " %s%s%s%s%s%s%s%s%s",
 	"with o as (",
 	    sql_string,
@@ -329,7 +340,7 @@ int create_spatial_index(sqlite3 *db,char  *dataset_name, char *idx_tbl,char * i
 	    
 	return 0;
 }
-int write2sqlite(char *sqlitedb_name,char *dataset_name, char *sql_string, char *twkb_name,char *id_name,char *idx_geom,char *idx_tbl, char *idx_id)
+int write2sqlite(char *sqlitedb_name,char *dataset_name, char *sql_string, char *twkb_name,char *id_name,char *idx_geom,char *idx_tbl, char *idx_id, int create)
 {
 	char *err_msg;
 	int spi_conn;
@@ -371,8 +382,8 @@ int write2sqlite(char *sqlitedb_name,char *dataset_name, char *sql_string, char 
 	cur = SPI_cursor_open("our_cursor", plan,NULL,NULL,true);
 
 	
-	
-	create_sqlite_table(&cur,db, insert_str,dataset_name,twkb_name, id_name);
+	elog(INFO, "build sql-strings and create table if : %d",create);
+		create_sqlite_table(&cur,db, insert_str,dataset_name,twkb_name, id_name,create);
 	
 	   elog(INFO, "back from creating table"); 
 	elog(INFO, "inserted sql = %s",insert_str);
@@ -489,7 +500,7 @@ int write2sqlite(char *sqlitedb_name,char *dataset_name, char *sql_string, char 
 	while (proc > 0);
 	
 	if(dataset_name && idx_geom && idx_id)
-		create_spatial_index(db,dataset_name,idx_tbl, idx_geom, idx_id, sql_string);
+		create_spatial_index(db,dataset_name,idx_tbl, idx_geom, idx_id, sql_string,create);
 	else
 		elog(INFO, "Finnishing without spatial index");
 	

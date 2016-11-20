@@ -19,40 +19,7 @@
 * Check that we are not about to read off the end of the WKB
 * array.
 */
-static inline void twkb_parse_state_advance(twkb_parse_state *s, size_t next)
-{
-    if( (s->pos + next) > s->twkb_end)
-    {
-        //~ lwerror("%s: TWKB structure does not match expected size!", __func__);
-        // lwnotice("TWKB structure does not match expected size!");
-    }
 
-    s->pos += next;
-}
-
-static inline int64_t twkb_parse_state_varint(twkb_parse_state *s)
-{
-    size_t size;
-    int64_t val = varint_s64_decode(s->pos, s->twkb_end, &size);
-    twkb_parse_state_advance(s, size);
-    return val;
-}
-
-static inline uint64_t twkb_parse_state_uvarint(twkb_parse_state *s)
-{
-    size_t size;
-    uint64_t val = varint_u64_decode(s->pos, s->twkb_end, &size);
-    twkb_parse_state_advance(s, size);
-    return val;
-}
-
-inline double twkb_parse_state_double(twkb_parse_state *s, double factor)
-{
-    size_t size;
-    int64_t val = varint_s64_decode(s->pos, s->twkb_end, &size);
-    twkb_parse_state_advance(s, size);
-    return val / factor;
-}
 
 
 static uint32_t lwtype_from_twkb_type(uint8_t twkb_type)

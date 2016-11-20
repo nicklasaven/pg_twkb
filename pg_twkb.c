@@ -177,7 +177,7 @@ PG_FUNCTION_INFO_V1(TWKB_Write2SQLite);
 Datum TWKB_Write2SQLite(PG_FUNCTION_ARGS)
 {
     char *sqlitedb_name,*dataset_name, *sql_string, *twkb_name, *id_name,*idx_tbl, *idx_geom, *idx_id;
- 
+  int create;
 /*Name of sqlite-database to write to*/
 	if ( PG_NARGS() < 1 || PG_ARGISNULL(0) )
     {
@@ -236,12 +236,18 @@ Datum TWKB_Write2SQLite(PG_FUNCTION_ARGS)
 		idx_id = "";
     }
     idx_id = text_to_cstring(PG_GETARG_TEXT_P(7));
+   /*if the table shall be created*/ 
+       if( PG_NARGS() < 9|| PG_ARGISNULL(8))
+    {
+		create = 1;
+    }
+    create = PG_GETARG_INT32(8);
     
 
    
 
 //	PG_FREE_IF_COPY(bytea_twkb, 0);
-    write2sqlite(sqlitedb_name,dataset_name, sql_string, twkb_name,id_name,idx_geom,idx_tbl, idx_id);
+    write2sqlite(sqlitedb_name,dataset_name, sql_string, twkb_name,id_name,idx_geom,idx_tbl, idx_id, create);
     
     pfree(sqlitedb_name);
     pfree(sql_string);

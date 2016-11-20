@@ -31,7 +31,7 @@ RETURNS void
 AS 'MODULE_PATHNAME', 'TWKB_Write2SQLite'
 LANGUAGE c IMMUTABLE;*/
 
-CREATE OR REPLACE FUNCTION TWKB_Write2SQLite(sqlitedb text,dataset_name text ,sql_string text, twkb_name text,id_name text,idx_tbl text, idx_geom text default '', idx_id text default '')
+CREATE OR REPLACE FUNCTION TWKB_Write2SQLite(sqlitedb text,dataset_name text ,sql_string text, twkb_name text,id_name text,idx_tbl text, idx_geom text default '', idx_id text default '', create_table int default 1)
 RETURNS void
 AS 'MODULE_PATHNAME', 'TWKB_Write2SQLite'
 LANGUAGE c ;
