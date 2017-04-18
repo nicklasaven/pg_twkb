@@ -21,7 +21,7 @@
 
 int create_sqlite_table(Portal *cur,sqlite3 *db,char *insert_str, char *dataset_name, char *twkb_name,char *id_name,int create);
 //int create_spatial_index(sqlite3 *db,char  *dataset_name, char *idx_geom, char *idx_id, char *sql_string);
-int create_spatial_index(sqlite3 *db,char  *dataset_name, char *idx_tbl,char * idx_geom, char *idx_id, char *sql_string, int create);
+int create_spatial_index(sqlite3 *db,char  *dataset_name, char *idx_tbl,char * idx_geom, char *idx_id,char *id_name, char *sql_string, int create);
 
 /*Input a postgres type and get a sqlite type back
 Anything but what is defined in types results as "text"*/
@@ -94,15 +94,15 @@ if(create)
 		
 		if (strcmp(field_name, id_name)==0) 
 		{
-			snprintf(tmp_str, sizeof(tmp_str), " %s%s",
-			" id integer primary key",
+			snprintf(tmp_str, sizeof(tmp_str), " %s  integer primary key %s",
+			id_name,
 			(i == tupdesc->natts) ? " " : ", ");	
 		
 			//construct the insert string with field names
 			snprintf(insert_str+strlengd_ins, SQLSTRLEN-strlengd_ins, "%s%s",
-			"id",
+			id_name,
 			(i == tupdesc->natts) ? " " : ", ");		
-			strlengd_ins += 3; //adding 1 for the comma-sign			
+			strlengd_ins += strlen(id_name) + 1; //adding 1 for the comma-sign			
 		}
 		else if (strcmp(field_name, twkb_name)==0) 
 		{
@@ -173,7 +173,7 @@ if(create)
 		return 0;
 }
 
-int create_spatial_index(sqlite3 *db,char  *dataset_name, char *idx_tbl,char * idx_geom, char *idx_id, char *sql_string, int create)
+int create_spatial_index(sqlite3 *db,char  *dataset_name, char *idx_tbl,char * idx_geom, char *idx_id,char *id_name, char *sql_string, int create)
 {
 	char sql_txt_pg[SQLSTRLEN];
 	char sql_txt_sqlite[SQLSTRLEN];
@@ -210,16 +210,12 @@ int create_spatial_index(sqlite3 *db,char  *dataset_name, char *idx_tbl,char * i
 		    } 	
 		   elog(INFO, "create table string: %s", sql_txt_pg); 
     }
-	snprintf(sql_txt_pg,sizeof(sql_txt_pg), " %s%s%s%s%s%s%s%s%s",
-	"with o as (",
+	snprintf(sql_txt_pg,sizeof(sql_txt_pg), " with o as (%s), g as( select %s id, %s geom from %s ) select g.id, st_xmin(g.geom) minx,st_xmax(g.geom) maxx,st_ymin(g.geom) miny,st_ymax(g.geom) maxy from g inner join o on g.id=o.%s;",
 	    sql_string,
-	    "), g as( select ",
 	idx_id,
-	" id,", 
 	idx_geom,
-	" geom from ",
 	    idx_tbl,
-	    ") select g.id, st_xmin(g.geom) minx,st_xmax(g.geom) maxx,st_ymin(g.geom) miny,st_ymax(g.geom) maxy from g inner join o on g.id=o.id");
+        id_name);
 
 	   elog(INFO, "select table string: %s", sql_txt_pg); 
 	plan =  SPI_prepare(sql_txt_pg,0,NULL);
@@ -500,7 +496,7 @@ int write2sqlite(char *sqlitedb_name,char *dataset_name, char *sql_string, char 
 	while (proc > 0);
 	
 	if(dataset_name && idx_geom && idx_id)
-		create_spatial_index(db,dataset_name,idx_tbl, idx_geom, idx_id, sql_string,create);
+		create_spatial_index(db,dataset_name,idx_tbl, idx_geom, idx_id,id_name, sql_string,create);
 	else
 		elog(INFO, "Finnishing without spatial index");
 	
